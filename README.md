@@ -21,6 +21,7 @@ The AAP hostname, username, and password can all be supplied by a `Red Hat Ansib
 | `aap_username` | String | Y | - | The username used to connect to AAP. This user needs sufficient privilege to pull images, push images, and update Execution Environment definitions in Controller. |
 | `aap_password` | String | Y | - | The password for the user specified in `aap_username`. |
 | `pah_api_token` | String | N | - | A Galaxy API Token for your Private Automation Hub (i.e. AAP itself). A credential using a custom Credential Type can be used for this (see below). If left undefined, the playbook will create one. Be aware that in AAP 2.5 and 2.6, this will invalidate any existing API token for the user you specify. |
+| `ee_reg_credential` | String | N | `PAH Container Registry` | The AAP Credential that AAP uses to connect to the Private Automation Hub |
 
 ## Credential Type
 

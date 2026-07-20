@@ -43,7 +43,6 @@
     ee_image_tag: "{{ hostvars['localhost']['image_tag'] }}"
     ee_build_image: "{{ survey_which_ee }}"
     ee_create_controller_def: "{{ (survey_controller_update | default(false)) | bool }}"
-    ee_reg_credential: "PAH Container Registry"
   tasks:
     - name: Ensure prerequisites are installed
       become: true

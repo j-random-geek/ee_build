@@ -2,6 +2,9 @@
 ee_verbosity: 3
 ee_squash: new
 
+ee_aap_version: 2.5
+ee_reg_credential: "PAH Container Registry"
+
 ee_base_registry_username: "{{ aap_username }}"
 ee_base_registry_password: "{{ aap_password }}"
 ee_base_image: "{{ aap_hostname | ansible.builtin.urlsplit('hostname') }}/ee-supported-rhel9:latest"
