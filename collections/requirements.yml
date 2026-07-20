@@ -1,0 +1,26 @@
+---
+collections:
+  - name: infra.ee_utilities
+  - name: infra.aap_configuration
+  - name: containers.podman
+  - name: ansible.hub
+  #
+  # This is for AAP 2.7
+  # - name: ansible.platform
+  #   version: ">=2.7.0,<2.8.0"
+  # - name: ansible.controller
+  #   version: ">=4.8.0,<4.9.0"
+  #
+  # This is for AAP 2.6
+  # - name: ansible.platform
+  #   version: ">=2.6.0,<2.7.0"
+  # - name: ansible.controller
+  #   version: ">=4.7.0,<4.8.0"
+  #
+  # This is for AAP 2.5
+  - name: ansible.platform
+    version: ">=2.5.0,<2.6.0"
+  - name: ansible.controller
+    version: ">=4.6.0,<4.7.0"
+
+...

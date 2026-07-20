@@ -1,0 +1,18 @@
+---
+ee_verbosity: 3
+ee_squash: new
+
+ee_base_registry_username: "{{ aap_username }}"
+ee_base_registry_password: "{{ aap_password }}"
+ee_base_image: "{{ aap_hostname | ansible.builtin.urlsplit('hostname') }}/ee-supported-rhel9:latest"
+ee_update_base_images: true
+
+ee_registry_username: "{{ aap_username }}"
+ee_registry_password: "{{ aap_password }}"
+ee_registry_namespace: local
+ee_registry_dest: "{{ aap_hostname | ansible.builtin.urlsplit('hostname') }}/{{ ee_registry_namespace }}"
+
+ee_ah_host: "{{ aap_hostname | ansible.builtin.urlsplit('hostname') }}"
+ee_ah_token: "{{ new_pah_token | default(pah_api_token) }}"
+
+...

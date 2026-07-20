@@ -1,0 +1,47 @@
+---
+  #
+  # Changes:
+  # 2025-05-13 Use libssh/ansible-pylibssh as paramiko is deprecated
+  # https://forum.ansible.com/t/deprecation-notice-paramiko-deprecated-for-network-cli-migrate-to-libssh-ansible-pylibssh/45782
+  # https://forum.ansible.com/t/migrating-to-ssh-type-libssh-for-ansible-netcommon-network-cli-across-ansible-networking-collections/45780
+  #
+  #
+
+ee_list:
+  - name: networks
+    description: Image to use for managing Cisco network devices. This one has libssh rather than the (deprecated) paramiko.
+    tags:
+      - "{{ ee_image_tag }}"
+      - latest
+    images:
+      base_image:
+        name: "{{ aap_hostname | ansible.builtin.urlsplit('hostname') }}/ee-minimal-rhel9:latest"
+    options:
+      package_manager_path: /usr/bin/microdnf
+    dependencies:
+      python_interpreter:
+        python_path: /usr/bin/python3.12
+      system:
+        - libssh
+        - libssh-devel
+        - python3.12-pip
+        - python3.12-setuptools
+      python:
+        - ansible-pylibssh>=1.4.0
+        - genie
+        - ncclient
+        - ntc-templates
+        - pyats
+        - textfsm
+        - ttp
+        - xmltodict
+      galaxy:
+        collections:
+          - name: ansible.netcommon
+            version: ">=8.5.0"
+          - name: ansible.utils
+          - name: cisco.ios
+          - name: cisco.iosxr
+          - name: cisco.nxos
+
+...

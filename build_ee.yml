@@ -1,0 +1,165 @@
+---
+- name: Build Execution Environment | Create timestamp for tag
+  hosts: localhost
+  gather_facts: true
+  become: false
+  tasks:
+    - name: Initialize variables
+      ansible.builtin.set_fact:
+        git_hash: ''
+        timestamp: ''
+        image_tag: ''
+
+    - name: Get image tag component (git hash)
+      block:
+        - name: Check for PROJECT_REVISION env var (in AAP)
+          ansible.builtin.set_fact:
+            git_hash: "{{ (lookup('ansible.builtin.env', 'PROJECT_REVISION'))[:7] }}"
+
+        - name: If PROJECT_REVISION is not set, look in playbook_dir
+          when:
+            - ((git_hash is not defined) or (git_hash == ''))
+          ansible.builtin.set_fact:
+            git_hash: "{{ lookup('ansible.builtin.pipe', 'cd {{ playbook_dir }}; git rev-parse --short HEAD') }}"
+
+        - name: DEBUG | Show git_hash value
+          ansible.builtin.debug:
+            var: git_hash
+
+    - name: Get image tag timestamp component
+      ansible.builtin.set_fact:
+        # git_hash: "{{ (lookup('ansible.builtin.env', 'PROJECT_REVISION'))[:7] }}"
+        timestamp: "{{ lookup('ansible.builtin.pipe', 'TZ=UTC+00 date +%y.%m%d.%H%M%S') }}"
+
+    - name: Build image tag
+      ansible.builtin.set_fact:
+        image_tag: "{{ timestamp }}{% if git_hash is defined and git_hash != '' %}-{{ git_hash }}{% endif %}"
+
+- name: Build Execution Environment | Run the build
+  hosts: builder
+  gather_facts: false
+  become: false
+  vars:
+    ee_image_tag: "{{ hostvars['localhost']['image_tag'] }}"
+    ee_build_image: "{{ survey_which_ee }}"
+    ee_create_controller_def: "{{ (survey_controller_update | default(false)) | bool }}"
+    ee_reg_credential: "PAH Container Registry"
+  tasks:
+    - name: Ensure prerequisites are installed
+      become: true
+      ansible.builtin.dnf:
+        name:
+          - podman
+          - ansible-builder
+        state: present
+
+    - name: Check to see if vars file exists
+      delegate_to: localhost
+      ansible.builtin.stat:
+        path: "vars/execution_environments/{{ ee_build_image }}.yml"
+      register: __vars_file
+
+    - name: Fail if the vars file does not exist
+      when:
+        - ((not __vars_file.stat is defined) or
+          (not __vars_file.stat.exists is defined) or
+          (not __vars_file.stat.exists))
+      ansible.builtin.fail:
+        msg: "The execution environment definition vars/execution_environments/{{ ee_build_image }}.yml does not exist. Exiting."
+
+    - name: Include the vars file
+      when:
+        - __vars_file.stat is defined
+        - __vars_file.stat.exists
+      ansible.builtin.include_vars:
+        file: "vars/execution_environments/{{ ee_build_image }}.yml"
+
+    - name: Build the EE image
+      block:
+        - name: Find out what version of AAP we are using
+          ansible.builtin.uri:
+            url: "{{ aap_hostname }}/api/"
+            method: GET
+            force: true
+            force_basic_auth: true
+            url_username: "{{ aap_username }}"
+            url_password: "{{ aap_password }}"
+            validate_certs: "{{ aap_validate_certs }}"
+          register: uri_output
+
+        - name: When AAP 2.7, get a new OAuth Token for PAH
+          when:
+            - uri_output.x_api_product_name == 'AAP gateway'
+            - uri_output.x_api_product_version is ansible.builtin.version('2.7.0', '>=', version_type='semver')  # noqa: yaml[line-length]
+          block:
+            - name: Get new OAuth2 Token from Gateway
+              ansible.platform.token:
+                aap_hostname: "{{ aap_hostname }}"
+                aap_username: "{{ aap_username }}"
+                aap_password: "{{ aap_password }}"
+                aap_validate_certs: "{{ aap_validate_certs }}"
+                scope: read
+                state: present
+                description: Token for EE build process
+
+            - name: Set the new PAH token
+              ansible.builtin.set_fact:
+                new_pah_token: "{{ ansible_facts.aap_token.token }}"
+              no_log: true
+
+            - name: Ensure that the new token is set
+              ansible.builtin.assert:
+                that:
+                  - (new_pah_token | length) > 0
+                fail_msg: The new Private Automation Hub token has not been set successfully
+
+        - name: When AAP 2.5 or 2.6, get new Private Automation Hub API token if not already set
+          when:
+            - uri_output.x_api_product_name == 'AAP gateway'
+            - uri_output.x_api_product_version is ansible.builtin.version('2.5.0', '>=', version_type='semver')  # noqa: yaml[line-length]
+            - uri_output.x_api_product_version is ansible.builtin.version('2.7.0', '<', version_type='semver')  # noqa: yaml[line-length]
+            - ((pah_api_token is not defined) or ((pah_api_token | length) < 1))
+          block:
+            - name: Get new API Token from PAH
+              ansible.hub.ah_token:
+                ah_host: "{{ aap_hostname }}"
+                ah_username: "{{ aap_username }}"
+                ah_password: "{{ aap_password }}"
+                aap_validate_certs: "{{ aap_validate_certs }}"
+              register: __aap_token
+
+            - name: Set the new PAH token
+              ansible.builtin.set_fact:
+                new_pah_token: "{{ ah_token.token }}"
+
+            - name: Ensure that the new token is set
+              ansible.builtin.assert:
+                that:
+                  - (new_pah_token | length) > 0
+                fail_msg: The new Private Automation Hub token has not been set successfully
+
+        - name: Invoke the ee_builder role
+          ansible.builtin.include_role:
+            name: infra.ee_utilities.ee_builder
+
+        - name: Push new images to Automation Controller
+          when:
+            - ee_create_controller_def is defined
+            - (ee_create_controller_def | bool)
+          ansible.builtin.include_role:
+            name: infra.aap_configuration.controller_execution_environments
+
+      always:
+        - name: Delete the new PAH token
+          when:
+            - ansible_facts.aap_token is defined
+          ansible.platform.token:
+            aap_hostname: "{{ aap_hostname }}"
+            aap_username: "{{ aap_username }}"
+            aap_password: "{{ aap_password }}"
+            aap_validate_certs: "{{ aap_validate_certs }}"
+            existing_token: "{{ ansible_facts.aap_token }}"
+            state: absent
+
+
+...
